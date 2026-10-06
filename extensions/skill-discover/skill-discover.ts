@@ -137,7 +137,9 @@ function transformSkillReferences(text: string): string {
   // Match @skill:name patterns (English or Chinese colon)
   // Replace with @skill:name("filePath") if the skill exists and has a filePath
   // Quotes ensure path boundaries are clear even with spaces or special characters
-  return text.replace(/@skill[:：]([\w.-]+)/g, (match, skillName) => {
+  // Negative lookahead (?!["(]) skips references that already have a path injected
+  // e.g. @skill:name("path") won't be matched again, preventing double injection
+  return text.replace(/@skill[:：]([\w.-]+)(?!["(])/g, (match, skillName) => {
     const skill = skills.find((s) => s.name === skillName);
     if (skill && skill.filePath) {
       // Escape any double quotes in the path (rare but safe)
