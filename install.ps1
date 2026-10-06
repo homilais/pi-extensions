@@ -203,7 +203,9 @@ function Select-FromMenu {
     Write-Host $Prompt
     
     do {
-        $key = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        # Use [System.Console]::ReadKey which returns ConsoleKeyInfo with .Key property
+        # $host.UI.RawUI.ReadKey returns KeyInfo which only has VirtualKeyCode (no .Key)
+        $key = [System.Console]::ReadKey($true)
         
         switch ($key.Key) {
             "UpArrow" {
