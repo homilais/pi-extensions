@@ -169,12 +169,15 @@ function Select-FromMenu {
     $originalCursorVisible = [System.Console]::CursorVisible
     [System.Console]::CursorVisible = $false
     
+    # ESC character (ASCII 27) - required for ANSI escape sequences
+    $ESC = [char]27
+    
     # ANSI escape codes for terminal control
-    $ansiHideCursor = "`a[?25l"
-    $ansiShowCursor = "`a[?25h"
-    $ansiClearLine = "`a[2K"
-    $ansiMoveUp = { param($n) "`a[${n}A" }
-    $ansiMoveDown = { param($n) "`a[${n}B" }
+    $ansiHideCursor = "$ESC[?25l"
+    $ansiShowCursor = "$ESC[?25h"
+    $ansiClearLine = "$ESC[2K"
+    $ansiMoveUp = { param($n) "$ESC[${n}A" }
+    $ansiMoveDown = { param($n) "$ESC[${n}B" }
     
     # Render menu function
     $renderMenu = {
@@ -211,7 +214,7 @@ function Select-FromMenu {
     Write-Host ""
     
     do {
-        $key = $host.UI.RawUI.ReadKey("NoEcho,AllowKeyDown")
+        $key = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
         
         switch ($key.Key) {
             "UpArrow" {
