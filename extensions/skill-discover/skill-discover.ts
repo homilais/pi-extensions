@@ -16,6 +16,11 @@
  * Configuration:
  * - Set environment variable PI_SKILL_DISCOVER_TOOL=true to enable the discoverSkill tool
  * - Default: tool is NOT registered (path injection provides filepath directly)
+ *
+ * Compatibility:
+ * - Terminal (TUI): full support — autocomplete + path injection + tool
+ * - pi-web (RPC/SDK): path injection + tool via lazy loading; autocomplete unavailable
+ * - Skills are loaded eagerly on session_start, with lazy fallback in input handler
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -27,7 +32,10 @@ import { Type } from "typebox";
 // Default: false (tool is not registered; path injection provides filepath directly)
 const ENABLE_DISCOVER_TOOL = process.env.PI_SKILL_DISCOVER_TOOL === "true";
 
-// --- Skill cache (populated at session_start) ---
+// --- Skill cache (lazy-loaded on demand) ---
+// In terminal mode, session_start fires and loads skills eagerly.
+// In pi-web (no bindExtensions), session_start may not fire,
+// so input handler and tool execute call ensureSkills() as fallback.
 
 interface SkillInfo {
   name: string;
@@ -37,6 +45,7 @@ interface SkillInfo {
 }
 
 let skills: SkillInfo[] = [];
+let skillsLoaded = false;
 
 function refreshSkills(commands: { name: string; description?: string; source?: string; sourceInfo?: { path?: string; baseDir?: string } }[]): void {
   skills = commands
@@ -47,6 +56,13 @@ function refreshSkills(commands: { name: string; description?: string; source?: 
       filePath: c.sourceInfo?.path,
       baseDir: c.sourceInfo?.baseDir,
     }));
+}
+
+// Lazy-load skills: no-op after first call
+function ensureSkills(commands: { name: string; description?: string; source?: string; sourceInfo?: { path?: string; baseDir?: string } }[]): void {
+  if (skillsLoaded) return;
+  refreshSkills(commands);
+  skillsLoaded = true;
 }
 
 // --- Fuzzy matching helper ---
@@ -166,6 +182,7 @@ export default function (pi: ExtensionAPI): void {
         query: Type.String({ description: "Search term to filter skill names. Empty string returns all skills." }),
       }),
       execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => {
+        ensureSkills(pi.getCommands()); // ensure skills loaded before query
         const q = (params.query ?? "").trim().toLowerCase();
         if (!q) {
           const items = skills.map((s) => {
@@ -193,9 +210,10 @@ export default function (pi: ExtensionAPI): void {
     });
   }
 
-  // 2. Refresh skill list on session start
+  // 2. Refresh skill list on session start (terminal mode: eager load)
+  // In pi-web, session_start may not fire; input handler serves as fallback
   pi.on("session_start", () => {
-    refreshSkills(pi.getCommands());
+    ensureSkills(pi.getCommands());
   });
 
   // 3. Add @skill: autocomplete provider
@@ -252,8 +270,13 @@ export default function (pi: ExtensionAPI): void {
   });
 
   // 4. Input transformation: @skill:name → @skill:name(filePath)
-  // This gives the model the filepath directly, reducing one tool call
+  // Lazy-load fallback: if session_start didn't fire (e.g. pi-web), load here
   pi.on("input", (event, _ctx) => {
+    // Pre-filter: skip entirely if no @skill: reference in text
+    if (!event.text.includes("@skill:") && !event.text.includes("@skill：")) {
+      return { action: "continue" };
+    }
+    ensureSkills(pi.getCommands()); // no-op after first load
     const transformed = transformSkillReferences(event.text);
     
     if (transformed === event.text) {
