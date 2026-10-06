@@ -164,36 +164,43 @@ function Select-FromMenu {
     }
     
     $selectedIndex = 0
-    $originalCursorVisible = $host.UI.RawUI.CursorVisible
-    $host.UI.RawUI.CursorVisible = $false
     
-    # Render menu
+    # Hide cursor using Console property
+    $originalCursorVisible = [System.Console]::CursorVisible
+    [System.Console]::CursorVisible = $false
+    
+    # ANSI escape codes for terminal control
+    $ansiHideCursor = "`a[?25l"
+    $ansiShowCursor = "`a[?25h"
+    $ansiClearLine = "`a[2K"
+    $ansiMoveUp = { param($n) "`a[${n}A" }
+    $ansiMoveDown = { param($n) "`a[${n}B" }
+    
+    # Render menu function
     $renderMenu = {
         param($idx)
-        # Clear menu lines
-        $linesToClear = $Items.Count
-        $cursorTop = $host.UI.RawUI.CursorPosition.Top
-        
-        for ($i = 0; $i -lt $linesToClear; $i++) {
-            $host.UI.RawUI.SetCursorPosition(0, $cursorTop - $linesToClear + $i + 1)
-            $host.UI.RawUI.ClearCurrentLine()
+        # Move cursor up to render position
+        $moveUpLines = $Items.Count + 2
+        if ($moveUpLines -gt 1) {
+            Write-Host -NoNewline (& $ansiMoveUp $moveUpLines)
         }
         
-        # Render items
-        $renderTop = $cursorTop - $linesToClear + 1
+        # Clear and redraw each line
         for ($i = 0; $i -lt $Items.Count; $i++) {
+            Write-Host -NoNewline $ansiClearLine
             if ($i -eq $idx) {
-                $host.UI.RawUI.SetCursorPosition(0, $renderTop + $i)
-                Write-Host "  >>> $($Items[$i])" -NoNewline
+                Write-Host "  >>> $($Items[$i])"
             }
             else {
-                $host.UI.RawUI.SetCursorPosition(0, $renderTop + $i)
-                Write-Host "      $($Items[$i])" -NoNewline
+                Write-Host "      $($Items[$i])"
             }
         }
         
-        # Position cursor below menu
-        $host.UI.RawUI.SetCursorPosition(0, $renderTop + $Items.Count)
+        # Move cursor back to input line
+        $moveDownLines = $Items.Count + 1
+        if ($moveDownLines -gt 0) {
+            Write-Host -NoNewline (& $ansiMoveDown $moveDownLines)
+        }
     }
     
     # Initial render
@@ -221,22 +228,33 @@ function Select-FromMenu {
             }
             "Enter" {
                 # Confirm selection
+                # Clear prompt line
+                Write-Host -NoNewline $ansiClearLine
+                Write-Host ""
                 return $selectedIndex
             }
             "Escape" {
                 # Cancel
+                Write-Host -NoNewline $ansiClearLine
+                Write-Host ""
                 return -1
             }
             "A" {
                 # Install All
+                Write-Host -NoNewline $ansiClearLine
+                Write-Host ""
                 return 999
             }
             "R" {
                 # Remove Mode
+                Write-Host -NoNewline $ansiClearLine
+                Write-Host ""
                 return 998
             }
             "Q" {
                 # Quit
+                Write-Host -NoNewline $ansiClearLine
+                Write-Host ""
                 return -2
             }
         }
@@ -296,7 +314,7 @@ function Show-InteractiveMenu {
     $choice = Select-FromMenu -Items $menuItems -Prompt "Select an option"
     
     # Restore cursor
-    $host.UI.RawUI.CursorVisible = $true
+    [System.Console]::CursorVisible = $true
     Write-Host ""
     
     # Handle choice
