@@ -29,6 +29,7 @@ get_available_extensions() {
 # Install a single extension
 install_extension() {
     local ext_name="$1"
+    local force="$2"
     local ext_path="$EXTENSIONS_DIR/$ext_name"
     
     if [ ! -d "$ext_path" ]; then
@@ -47,6 +48,27 @@ install_extension() {
         return 1
     fi
     
+    # Check if extension is already installed
+    local existing=()
+    for file in "${files[@]}"; do
+        local filename=$(basename "$file")
+        if [ -f "$PI_EXTENSIONS_DIR/$filename" ]; then
+            existing+=("$filename")
+        fi
+    done
+    
+    if [ ${#existing[@]} -gt 0 ] && [ "$force" != "true" ]; then
+        echo -e "${YELLOW}Extension '$ext_name' is already installed:${NC}"
+        for f in "${existing[@]}"; do
+            echo "    $f"
+        done
+        read -p "Overwrite? (y/N) " answer
+        if [[ ! "$answer" =~ ^[Yy] ]]; then
+            echo -e "${YELLOW}Skipped '$ext_name'${NC}"
+            return 1
+        fi
+    fi
+    
     # Create Pi extensions directory if not exists
     mkdir -p "$PI_EXTENSIONS_DIR"
     
@@ -56,25 +78,6 @@ install_extension() {
         cp "$file" "$PI_EXTENSIONS_DIR/$filename"
         echo -e "  ${GREEN}✓${NC} Installed $filename"
     done
-    
-    # Clean up old renamed files listed in package.json ("oldNames" field)
-    local pkg_json="$ext_path/package.json"
-    if [ -f "$pkg_json" ]; then
-        # Extract oldNames array from package.json using grep+sed
-        local old_names_str=$(grep -o '"oldNames"[[:space:]]*:[[:space:]]*\[[^]]*\]' "$pkg_json" 2>/dev/null | \
-            sed 's/.*\[//;s/\]//;s/"//g' 2>/dev/null)
-        if [ -n "$old_names_str" ]; then
-            IFS=',' read -ra old_names <<< "$old_names_str"
-            for old_name in "${old_names[@]}"; do
-                old_name=$(echo "$old_name" | xargs)  # trim whitespace
-                local old_file="$PI_EXTENSIONS_DIR/$old_name.ts"
-                if [ -f "$old_file" ]; then
-                    rm "$old_file"
-                    echo -e "  ${YELLOW}[CLEANUP] Removed old file: $old_name.ts${NC}"
-                fi
-            done
-        fi
-    fi
     
     echo -e "${GREEN}✓ Extension '$ext_name' installed successfully${NC}"
 }
@@ -88,6 +91,7 @@ show_usage() {
     echo "Options:"
     echo "  -l, --list          List available extensions"
     echo "  -a, --all           Install all extensions"
+    echo "  -f, --force         Overwrite without prompting"
     echo "  -r, --remove        Remove installed extensions"
     echo "  -h, --help          Show this help message"
     echo ""
@@ -97,6 +101,7 @@ show_usage() {
     echo "  $0 skill-discover              # Install specific extension"
     echo "  $0 -r skill-discover           # Remove specific extension"
     echo "  $0 skill-discover pdf-tools    # Install multiple extensions"
+    echo "  $0 --all --force               # Install/overwrite all"
 }
 
 # Show available extensions
@@ -161,6 +166,7 @@ remove_extension() {
 main() {
     local install_all=false
     local remove_mode=false
+    local force_mode=false
     local extensions=()
     
     # Parse arguments
@@ -172,6 +178,10 @@ main() {
                 ;;
             -a|--all)
                 install_all=true
+                shift
+                ;;
+            -f|--force)
+                force_mode=true
                 shift
                 ;;
             -r|--remove)
@@ -227,7 +237,7 @@ main() {
         local success=0
         local failed=0
         for ext in "${to_install[@]}"; do
-            if install_extension "$ext"; then
+            if install_extension "$ext" "$force_mode"; then
                 ((success++))
             else
                 ((failed++))

@@ -31,6 +31,7 @@ param(
     [switch]$List,
     [switch]$InstallAll,
     [switch]$Interactive,
+    [switch]$Force,
     [string[]]$Install,
     [string[]]$Remove,
     [string]$PiExtensionsDir = "$HOME\.pi\agent\extensions"
@@ -85,7 +86,10 @@ function Get-ExtensionDescription {
 
 # Install a single extension
 function Install-Extension {
-    param([string]$ExtensionName)
+    param(
+        [string]$ExtensionName,
+        [switch]$Force
+    )
     
     $extPath = Join-Path $ExtensionsDir $ExtensionName
     if (-not (Test-Path $extPath)) {
@@ -101,6 +105,27 @@ function Install-Extension {
         return $false
     }
     
+    # Check if extension is already installed (any target file exists)
+    $existingFiles = @()
+    foreach ($file in $files) {
+        $destPath = Join-Path $PiExtensionsDir $file.Name
+        if (Test-Path $destPath) {
+            $existingFiles += $file.Name
+        }
+    }
+    
+    if ($existingFiles.Count -gt 0 -and -not $Force) {
+        Write-Warn "Extension '$ExtensionName' is already installed:"
+        foreach ($f in $existingFiles) {
+            Write-Host "    $f"
+        }
+        $answer = Read-Host "Overwrite? (y/N)"
+        if ($answer -notmatch '^[Yy]') {
+            Write-Info "Skipped '$ExtensionName'"
+            return $false
+        }
+    }
+    
     # Create Pi extensions directory if not exists
     if (-not (Test-Path $PiExtensionsDir)) {
         New-Item -ItemType Directory -Path $PiExtensionsDir -Force | Out-Null
@@ -113,23 +138,6 @@ function Install-Extension {
         Copy-Item -Path $file.FullName -Destination $destPath -Force
         Write-Success "  [OK] Installed $($file.Name)"
         $installed++
-    }
-    
-    # Clean up old renamed files listed in package.json ("oldNames" field)
-    # e.g. skill-discover was previously named skill-search
-    $pkgPath = Join-Path $extPath "package.json"
-    if (Test-Path $pkgPath) {
-        $pkg = Get-Content $pkgPath -Raw | ConvertFrom-Json
-        $oldNames = $pkg.oldNames
-        if ($oldNames) {
-            foreach ($oldName in $oldNames) {
-                $oldFile = Join-Path $PiExtensionsDir "$oldName.ts"
-                if (Test-Path $oldFile) {
-                    Remove-Item -Path $oldFile -Force
-                    Write-Info "  [CLEANUP] Removed old file: $oldName.ts"
-                }
-            }
-        }
     }
     
     Write-Success "[OK] Extension '$ExtensionName' installed ($installed files)"
@@ -356,6 +364,7 @@ function Show-InteractiveMenu {
 
 # Install all extensions
 function Install-AllExtensions {
+    param([switch]$Force)
     $extensions = @(Get-AvailableExtensions)
     
     if ($extensions.Count -eq 0) {
@@ -370,7 +379,7 @@ function Install-AllExtensions {
     $failed = 0
     
     foreach ($ext in $extensions) {
-        if (Install-Extension $ext) {
+        if (Install-Extension $ext -Force:$Force) {
             $success++
         }
         else {
@@ -413,7 +422,7 @@ function Main {
     
     # Install all
     if ($InstallAll) {
-        Install-AllExtensions
+        Install-AllExtensions -Force:$Force
         return
     }
     
@@ -431,7 +440,7 @@ function Main {
         $success = 0
         $failed = 0
         foreach ($ext in $Install) {
-            if (Install-Extension $ext) {
+            if (Install-Extension $ext -Force:$Force) {
                 $success++
             }
             else {
@@ -481,12 +490,14 @@ function Main {
     Write-Host "  .\install.ps1 -InstallAll              Install all extensions"
     Write-Host "  .\install.ps1 -Remove <name>           Remove specific extension"
     Write-Host "  .\install.ps1 -Interactive             Interactive selection mode"
+    Write-Host "  .\install.ps1 -Install <name> -Force    Overwrite without prompting"
     Write-Host ""
     Write-Host "Examples:"
     Write-Host "  .\install.ps1 -List"
     Write-Host "  .\install.ps1 -Install skill-discover"
     Write-Host "  .\install.ps1 -InstallAll"
     Write-Host "  .\install.ps1 -Interactive"
+    Write-Host "  .\install.ps1 -Install skill-discover -Force"
 }
 
 Main
