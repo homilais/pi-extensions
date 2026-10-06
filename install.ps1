@@ -63,7 +63,8 @@ function Get-AvailableExtensions {
             }
         }
     }
-    return $extensions
+    # Ensure we always return an array, even with single element
+    return @($extensions)
 }
 
 # Get extension description from package.json
@@ -153,7 +154,7 @@ function Remove-Extension {
 
 # List extensions with interactive selection
 function Show-InteractiveMenu {
-    $extensions = Get-AvailableExtensions
+    $extensions = @(Get-AvailableExtensions)
     
     if ($extensions.Count -eq 0) {
         Write-Warn "No extensions found in '$ExtensionsDir'"
@@ -163,10 +164,9 @@ function Show-InteractiveMenu {
     Write-Info "`nAvailable Extensions:"
     Write-Host ("-" * 50)
     
-    for ($i = 0; $i -lt $extensions.Count; $i++) {
-        $extName = $extensions[$i]
+    $num = 1
+    foreach ($extName in $extensions) {
         $desc = Get-ExtensionDescription $extName
-        $num = $i + 1
         
         if ($desc) {
             Write-Host "  [$num] $extName - $desc"
@@ -174,6 +174,7 @@ function Show-InteractiveMenu {
         else {
             Write-Host "  [$num] $extName"
         }
+        $num++
     }
     
     Write-Host ("-" * 50)
@@ -225,7 +226,7 @@ function Show-InteractiveMenu {
 
 # Install all extensions
 function Install-AllExtensions {
-    $extensions = Get-AvailableExtensions
+    $extensions = @(Get-AvailableExtensions)
     
     if ($extensions.Count -eq 0) {
         Write-Warn "No extensions available to install"
@@ -259,7 +260,7 @@ function Install-AllExtensions {
 function Main {
     # Show list
     if ($List) {
-        $extensions = Get-AvailableExtensions
+        $extensions = @(Get-AvailableExtensions)
         if ($extensions.Count -eq 0) {
             Write-Warn "No extensions found"
             return
