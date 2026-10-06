@@ -4,12 +4,12 @@
 
 ### Issue tracker
 
-GitHub Issues (uses `gh` CLI). See `docs/agents/issue-tracker.md`.
+GitHub Issues（使用 `gh` CLI）。详见 `docs/agents/issue-tracker.md`。
 
 ### Triage labels
 
-Default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+默认标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。详见 `docs/agents/triage-labels.md`。
 
 ### Domain docs
 
-Single-context layout (root `GLOSSARY.md` + `docs/adr/`). See `docs/agents/domain.md`.
+Single-context 布局（根目录 `GLOSSARY.md` + `docs/adr/`）。详见 `docs/agents/domain.md`。
