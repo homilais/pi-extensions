@@ -1,0 +1,17 @@
+{
+  "name": "pi-extensions",
+  "version": "1.0.0",
+  "description": "Aggregated Pi coding agent extensions collection",
+  "type": "module",
+  "scripts": {
+    "list": "powershell -File install.ps1 -List",
+    "install": "powershell -File install.ps1 -InstallAll",
+    "install:skill-discover": "powershell -File install.ps1 -Install skill-discover",
+    "interactive": "powershell -File install.ps1 -Interactive"
+  },
+  "keywords": ["pi", "extensions", "coding-agent", "skill"],
+  "author": "Your Name",
+  "license": "MIT",
+  "private": true,
+  "devDependencies": {}
+}
