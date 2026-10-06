@@ -153,10 +153,11 @@ function Remove-Extension {
 }
 
 # Keyboard navigation helper
+# Uses $host.UI.RawUI.CursorPosition for reliable cursor repositioning
 function Select-FromMenu {
     param(
         [string[]]$Items,
-        [string]$Prompt = "Select (use arrow keys, Enter to confirm, Esc to cancel)"
+        [string]$Prompt = "Use Up/Down arrows to navigate, Enter to confirm, Esc to cancel"
     )
     
     if ($Items.Count -eq 0) {
@@ -164,54 +165,42 @@ function Select-FromMenu {
     }
     
     $selectedIndex = 0
+    $bufferWidth = $host.UI.RawUI.BufferSize.Width
     
-    # Hide cursor using Console property
-    $originalCursorVisible = [System.Console]::CursorVisible
+    # Hide cursor
     [System.Console]::CursorVisible = $false
     
-    # ESC character (ASCII 27) - required for ANSI escape sequences
-    $ESC = [char]27
+    # Record the top position of the menu (before any items are written)
+    $menuTop = $host.UI.RawUI.CursorPosition.Top
     
-    # ANSI escape codes for terminal control
-    $ansiHideCursor = "$ESC[?25l"
-    $ansiShowCursor = "$ESC[?25h"
-    $ansiClearLine = "$ESC[2K"
-    $ansiMoveUp = { param($n) "$ESC[${n}A" }
-    $ansiMoveDown = { param($n) "$ESC[${n}B" }
-    
-    # Render menu function
-    $renderMenu = {
+    # Render menu items at the saved position
+    # On re-render, repositions cursor to menuTop and overwrites all lines
+    function script:Render-MenuItems {
         param($idx)
-        # Move cursor up to render position
-        $moveUpLines = $Items.Count + 2
-        if ($moveUpLines -gt 1) {
-            Write-Host -NoNewline (& $ansiMoveUp $moveUpLines)
-        }
+        $pos = $host.UI.RawUI.CursorPosition
+        $pos.Left = 0
+        $pos.Top = $script:menuTop
+        $host.UI.RawUI.CursorPosition = $pos
         
-        # Clear and redraw each line
-        for ($i = 0; $i -lt $Items.Count; $i++) {
-            Write-Host -NoNewline $ansiClearLine
-            if ($i -eq $idx) {
-                Write-Host "  >>> $($Items[$i])"
-            }
-            else {
-                Write-Host "      $($Items[$i])"
-            }
-        }
-        
-        # Move cursor back to input line
-        $moveDownLines = $Items.Count + 1
-        if ($moveDownLines -gt 0) {
-            Write-Host -NoNewline (& $ansiMoveDown $moveDownLines)
+        for ($i = 0; $i -lt $script:menuItems.Count; $i++) {
+            $prefix = if ($i -eq $idx) { "  >>> " } else { "      " }
+            $line = "$prefix$($script:menuItems[$i])"
+            # PadRight overwrites leftover characters from previous render
+            Write-Host $line.PadRight($script:bufferWidth - 1)
         }
     }
     
-    # Initial render
-    & $renderMenu $selectedIndex
+    # Store variables in script scope so Render-MenuItems can access them
+    $script:menuItems = $Items
+    $script:menuTop = $menuTop
+    $script:bufferWidth = $bufferWidth
     
+    # Initial render
+    Render-MenuItems $selectedIndex
+    
+    # Print prompt below the menu
     Write-Host ""
-    Write-Host $Prompt -NoNewline
-    Write-Host ""
+    Write-Host $Prompt
     
     do {
         $key = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
@@ -220,50 +209,42 @@ function Select-FromMenu {
             "UpArrow" {
                 if ($selectedIndex -gt 0) {
                     $selectedIndex--
-                    & $renderMenu $selectedIndex
+                    Render-MenuItems $selectedIndex
                 }
             }
             "DownArrow" {
                 if ($selectedIndex -lt $Items.Count - 1) {
                     $selectedIndex++
-                    & $renderMenu $selectedIndex
+                    Render-MenuItems $selectedIndex
                 }
             }
             "Enter" {
-                # Confirm selection
-                # Clear prompt line
-                Write-Host -NoNewline $ansiClearLine
+                [System.Console]::CursorVisible = $true
                 Write-Host ""
                 return $selectedIndex
             }
             "Escape" {
-                # Cancel
-                Write-Host -NoNewline $ansiClearLine
+                [System.Console]::CursorVisible = $true
                 Write-Host ""
                 return -1
             }
             "A" {
-                # Install All
-                Write-Host -NoNewline $ansiClearLine
+                [System.Console]::CursorVisible = $true
                 Write-Host ""
                 return 999
             }
             "R" {
-                # Remove Mode
-                Write-Host -NoNewline $ansiClearLine
+                [System.Console]::CursorVisible = $true
                 Write-Host ""
                 return 998
             }
             "Q" {
-                # Quit
-                Write-Host -NoNewline $ansiClearLine
+                [System.Console]::CursorVisible = $true
                 Write-Host ""
                 return -2
             }
         }
     } while ($true)
-    
-    return -1
 }
 
 # List extensions with interactive selection
@@ -278,7 +259,7 @@ function Show-InteractiveMenu {
     Write-Info "`nAvailable Extensions:"
     Write-Host ("-" * 50)
     
-    # Build menu items with descriptions
+    # Build menu items with descriptions (extensions only)
     $menuItems = @()
     foreach ($extName in $extensions) {
         $desc = Get-ExtensionDescription $extName
@@ -289,36 +270,15 @@ function Show-InteractiveMenu {
             $menuItems += $extName
         }
     }
-    $menuItems += "---"
-    $menuItems += "[A] Install All"
-    $menuItems += "[R] Remove Mode"
-    $menuItems += "[Q] Quit"
     
-    Write-Host ""
-    Write-Host "  Use arrow keys to navigate, Enter to select"
+    Write-Host "  Use Up/Down arrows to navigate, Enter to install"
     Write-Host "  Press A for Install All, R for Remove, Q to Quit"
     Write-Host ""
     
-    # Show numbered menu
-    $num = 1
-    foreach ($item in $menuItems) {
-        if ($item -eq "---") {
-            Write-Host ("-" * 50)
-        }
-        else {
-            Write-Host "  [$num] $item"
-            $num++
-        }
-    }
+    # Select-FromMenu handles display + keyboard navigation
+    $choice = Select-FromMenu -Items $menuItems -Prompt "Press Enter to install, or A/R/Q for other actions"
+    
     Write-Host ("-" * 50)
-    Write-Host ""
-    
-    # Use keyboard navigation
-    $choice = Select-FromMenu -Items $menuItems -Prompt "Select an option"
-    
-    # Restore cursor
-    [System.Console]::CursorVisible = $true
-    Write-Host ""
     
     # Handle choice
     if ($choice -eq -1) {
@@ -335,14 +295,16 @@ function Show-InteractiveMenu {
         return
     }
     elseif ($choice -eq 998) {
-        Write-Info "Remove Mode"
-        $removeChoice = Read-Host "Enter extension number to remove (or Q to cancel)"
-        if ($removeChoice -eq "Q") { return }
-        if ($removeChoice -match "^[0-9]+$") {
-            $extNum = [int]$removeChoice - 1
-            if ($extNum -ge 0 -and $extNum -lt $extensions.Count) {
-                Remove-Extension $extensions[$extNum]
-            }
+        # Remove mode: reuse the same menu to select which extension to remove
+        Write-Info "Remove Mode - select extension to remove:"
+        Write-Host ""
+        $removeChoice = Select-FromMenu -Items $menuItems -Prompt "Press Enter to remove, or Esc to cancel"
+        Write-Host ("-" * 50)
+        if ($removeChoice -ge 0 -and $removeChoice -lt $extensions.Count) {
+            Remove-Extension $extensions[$removeChoice]
+        }
+        else {
+            Write-Info "No extension selected for removal"
         }
         return
     }
