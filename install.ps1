@@ -171,15 +171,15 @@ function Select-FromMenu {
     [System.Console]::CursorVisible = $false
     
     # Record the top position of the menu (before any items are written)
-    $menuTop = $host.UI.RawUI.CursorPosition.Top
+    $menuTop = $host.UI.RawUI.CursorPosition.Y
     
     # Render menu items at the saved position
     # On re-render, repositions cursor to menuTop and overwrites all lines
     function script:Render-MenuItems {
         param($idx)
         $pos = $host.UI.RawUI.CursorPosition
-        $pos.Left = 0
-        $pos.Top = $script:menuTop
+        $pos.X = 0
+        $pos.Y = $script:menuTop
         $host.UI.RawUI.CursorPosition = $pos
         
         for ($i = 0; $i -lt $script:menuItems.Count; $i++) {
