@@ -145,43 +145,52 @@ if (patchedCode.includes(ADD_PROVIDER_NOOP)) {
 
 // === 补丁 3: 新增 autocomplete 请求处理 ===
 //
-// 找到 extension_ui_request 的发送方法，在 requestExtensionUi 中
-// 添加 autocomplete 方法支持
+// 找到 resolveExtensionUiResponse 方法，在其后添加 handleAutocompleteRequest 方法
+// 然后在 send 方法的 switch 中添加 case"get_autocomplete"
 //
-// 原始代码（简化）:
-//   let j={type:"extension_ui_request",id:i,...a,...d?{timeout:d,expiresAt:Date.now()+d}:{}};
+// 原始代码（resolveExtensionUiResponse 方法结束）:
+//   resolveExtensionUiResponse(a){let b=this.pendingUiResponses.get(a.id);b&&b.resolve(a)}
 //
 // 替换为:
-//   let j={type:"extension_ui_request",id:i,...a,...d?{timeout:d,expiresAt:Date.now()+d}:{}};
-//   if(j.method==="autocomplete"){
+//   resolveExtensionUiResponse(a){let b=this.pendingUiResponses.get(a.id);b&&b.resolve(a)}
+//   handleAutocompleteRequest(a){
 //     let p=autocompleteProviders[autocompleteProviders.length-1];
-//     if(p){
-//       p.getSuggestions([],0,0,{signal:new AbortController().signal})
-//         .then(s=>{s?m({items:s.items,prefix:s.prefix}):m(null)})
-//         .catch(()=>m(null));
-//       return
-//     }
+//     if(!p){this.emit({type:"autocomplete_result",requestId:a.requestId,items:[]});return null}
+//     p.getSuggestions([],0,0,{signal:new AbortController().signal,force:true})
+//       .then(s=>{let items=s?s.items:[];this.emit({type:"autocomplete_result",requestId:a.requestId,items,prefix:s?s.prefix:a.trigger})})
+//       .catch(()=>this.emit({type:"autocomplete_result",requestId:a.requestId,items:[]}))
+//     return null
 //   }
 
-const REQUEST_BUILD = 'let j={type:"extension_ui_request",id:i,...a,...d?{timeout:d,expiresAt:Date.now()+d}:{}};';
-const REQUEST_WITH_AUTOCOMPLETE = `let j={type:"extension_ui_request",id:i,...a,...d?{timeout:d,expiresAt:Date.now()+d}:{}};
-if(j.method==="autocomplete"){
-  let p=autocompleteProviders[autocompleteProviders.length-1];
-  if(p){
-    p.getSuggestions([],0,0,{signal:new AbortController().signal,force:true})
-      .then(s=>{if(s){m({items:s.items,prefix:s.prefix})}else{m(null)}})
-      .catch(()=>m(null))
-  }else{
-    m(null)
-  }
-  return
-}`;
+const METHOD_END = 'resolveExtensionUiResponse(a){let b=this.pendingUiResponses.get(a.id);b&&b.resolve(a)}';
+const METHOD_WITH_AUTOCOMPLETE = `resolveExtensionUiResponse(a){let b=this.pendingUiResponses.get(a.id);b&&b.resolve(a)}handleAutocompleteRequest(a){let p=autocompleteProviders[autocompleteProviders.length-1];if(!p){this.emit({type:"autocomplete_result",requestId:a.requestId,items:[]});return null}p.getSuggestions([],0,0,{signal:new AbortController().signal,force:true}).then(s=>{let items=s?s.items:[];this.emit({type:"autocomplete_result",requestId:a.requestId,items,prefix:s?s.prefix:a.trigger})}).catch(()=>this.emit({type:"autocomplete_result",requestId:a.requestId,items:[]}))return null}`;
 
-if (patchedCode.includes(REQUEST_BUILD)) {
-  patchedCode = patchedCode.replace(REQUEST_BUILD, REQUEST_WITH_AUTOCOMPLETE);
-  console.log('[pi-web-autocomplete] ✓ Added autocomplete request handler');
+if (patchedCode.includes(METHOD_END)) {
+  patchedCode = patchedCode.replace(METHOD_END, METHOD_WITH_AUTOCOMPLETE);
+  console.log('[pi-web-autocomplete] ✓ Added handleAutocompleteRequest method');
 } else {
-  console.log('[pi-web-autocomplete] ⚠ request builder pattern not found');
+  console.log('[pi-web-autocomplete] ⚠ resolveExtensionUiResponse method pattern not found');
+}
+
+// === 补丁 4: 在 send 方法中添加 case ===
+//
+// 找到 case"extension_ui_input"，在其后添加 case"get_autocomplete"
+//
+// 原始代码:
+//   case"extension_ui_input":return this.handleExtensionUiInput(a.id,a.data),null;
+//
+// 替换为:
+//   case"extension_ui_input":return this.handleExtensionUiInput(a.id,a.data),null;
+//   case"get_autocomplete":return this.handleAutocompleteRequest(a),null;
+
+const CASE_INPUT = 'case"extension_ui_input":return this.handleExtensionUiInput(a.id,a.data),null;';
+const CASE_WITH_AUTOCOMPLETE = 'case"extension_ui_input":return this.handleExtensionUiInput(a.id,a.data),null;case"get_autocomplete":return this.handleAutocompleteRequest(a),null;';
+
+if (patchedCode.includes(CASE_INPUT)) {
+  patchedCode = patchedCode.replace(CASE_INPUT, CASE_WITH_AUTOCOMPLETE);
+  console.log('[pi-web-autocomplete] ✓ Added get_autocomplete case');
+} else {
+  console.log('[pi-web-autocomplete] ⚠ extension_ui_input case pattern not found');
 }
 
 // 写入修改后的文件
