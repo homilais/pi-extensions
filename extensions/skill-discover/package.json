@@ -4,6 +4,7 @@
   "description": "Pi extension for skill discovery with @skill: inline autocomplete",
   "type": "module",
   "main": "skill-discover.ts",
+  "oldNames": ["skill-search"],
   "keywords": ["pi", "extension", "skill", "discover", "autocomplete"],
   "license": "MIT"
 }

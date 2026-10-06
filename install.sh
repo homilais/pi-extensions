@@ -57,6 +57,25 @@ install_extension() {
         echo -e "  ${GREEN}✓${NC} Installed $filename"
     done
     
+    # Clean up old renamed files listed in package.json ("oldNames" field)
+    local pkg_json="$ext_path/package.json"
+    if [ -f "$pkg_json" ]; then
+        # Extract oldNames array from package.json using grep+sed
+        local old_names_str=$(grep -o '"oldNames"[[:space:]]*:[[:space:]]*\[[^]]*\]' "$pkg_json" 2>/dev/null | \
+            sed 's/.*\[//;s/\]//;s/"//g' 2>/dev/null)
+        if [ -n "$old_names_str" ]; then
+            IFS=',' read -ra old_names <<< "$old_names_str"
+            for old_name in "${old_names[@]}"; do
+                old_name=$(echo "$old_name" | xargs)  # trim whitespace
+                local old_file="$PI_EXTENSIONS_DIR/$old_name.ts"
+                if [ -f "$old_file" ]; then
+                    rm "$old_file"
+                    echo -e "  ${YELLOW}[CLEANUP] Removed old file: $old_name.ts${NC}"
+                fi
+            done
+        fi
+    fi
+    
     echo -e "${GREEN}✓ Extension '$ext_name' installed successfully${NC}"
 }
 

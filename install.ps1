@@ -115,6 +115,23 @@ function Install-Extension {
         $installed++
     }
     
+    # Clean up old renamed files listed in package.json ("oldNames" field)
+    # e.g. skill-discover was previously named skill-search
+    $pkgPath = Join-Path $extPath "package.json"
+    if (Test-Path $pkgPath) {
+        $pkg = Get-Content $pkgPath -Raw | ConvertFrom-Json
+        $oldNames = $pkg.oldNames
+        if ($oldNames) {
+            foreach ($oldName in $oldNames) {
+                $oldFile = Join-Path $PiExtensionsDir "$oldName.ts"
+                if (Test-Path $oldFile) {
+                    Remove-Item -Path $oldFile -Force
+                    Write-Info "  [CLEANUP] Removed old file: $oldName.ts"
+                }
+            }
+        }
+    }
+    
     Write-Success "[OK] Extension '$ExtensionName' installed ($installed files)"
     return $true
 }
