@@ -152,6 +152,99 @@ function Remove-Extension {
     return $true
 }
 
+# Keyboard navigation helper
+function Select-FromMenu {
+    param(
+        [string[]]$Items,
+        [string]$Prompt = "Select (use arrow keys, Enter to confirm, Esc to cancel)"
+    )
+    
+    if ($Items.Count -eq 0) {
+        return -1
+    }
+    
+    $selectedIndex = 0
+    $originalCursorVisible = $host.UI.RawUI.CursorVisible
+    $host.UI.RawUI.CursorVisible = $false
+    
+    # Render menu
+    $renderMenu = {
+        param($idx)
+        # Clear menu lines
+        $linesToClear = $Items.Count
+        $cursorTop = $host.UI.RawUI.CursorPosition.Top
+        
+        for ($i = 0; $i -lt $linesToClear; $i++) {
+            $host.UI.RawUI.SetCursorPosition(0, $cursorTop - $linesToClear + $i + 1)
+            $host.UI.RawUI.ClearCurrentLine()
+        }
+        
+        # Render items
+        $renderTop = $cursorTop - $linesToClear + 1
+        for ($i = 0; $i -lt $Items.Count; $i++) {
+            if ($i -eq $idx) {
+                $host.UI.RawUI.SetCursorPosition(0, $renderTop + $i)
+                Write-Host "  >>> $($Items[$i])" -NoNewline
+            }
+            else {
+                $host.UI.RawUI.SetCursorPosition(0, $renderTop + $i)
+                Write-Host "      $($Items[$i])" -NoNewline
+            }
+        }
+        
+        # Position cursor below menu
+        $host.UI.RawUI.SetCursorPosition(0, $renderTop + $Items.Count)
+    }
+    
+    # Initial render
+    & $renderMenu $selectedIndex
+    
+    Write-Host ""
+    Write-Host $Prompt -NoNewline
+    Write-Host ""
+    
+    do {
+        $key = $host.UI.RawUI.ReadKey("NoEcho,AllowKeyDown")
+        
+        switch ($key.Key) {
+            "UpArrow" {
+                if ($selectedIndex -gt 0) {
+                    $selectedIndex--
+                    & $renderMenu $selectedIndex
+                }
+            }
+            "DownArrow" {
+                if ($selectedIndex -lt $Items.Count - 1) {
+                    $selectedIndex++
+                    & $renderMenu $selectedIndex
+                }
+            }
+            "Enter" {
+                # Confirm selection
+                return $selectedIndex
+            }
+            "Escape" {
+                # Cancel
+                return -1
+            }
+            "A" {
+                # Install All
+                return 999
+            }
+            "R" {
+                # Remove Mode
+                return 998
+            }
+            "Q" {
+                # Quit
+                return -2
+            }
+        }
+    } while ($true)
+    
+    return -1
+}
+
 # List extensions with interactive selection
 function Show-InteractiveMenu {
     $extensions = @(Get-AvailableExtensions)
@@ -164,63 +257,80 @@ function Show-InteractiveMenu {
     Write-Info "`nAvailable Extensions:"
     Write-Host ("-" * 50)
     
-    $num = 1
+    # Build menu items with descriptions
+    $menuItems = @()
     foreach ($extName in $extensions) {
         $desc = Get-ExtensionDescription $extName
-        
         if ($desc) {
-            Write-Host "  [$num] $extName - $desc"
+            $menuItems += "$extName - $desc"
         }
         else {
-            Write-Host "  [$num] $extName"
+            $menuItems += $extName
         }
-        $num++
     }
+    $menuItems += "---"
+    $menuItems += "[A] Install All"
+    $menuItems += "[R] Remove Mode"
+    $menuItems += "[Q] Quit"
     
-    Write-Host ("-" * 50)
-    Write-Host "  [A] Install All"
-    Write-Host "  [R] Remove Mode"
-    Write-Host "  [Q] Quit"
+    Write-Host ""
+    Write-Host "  Use arrow keys to navigate, Enter to select"
+    Write-Host "  Press A for Install All, R for Remove, Q to Quit"
     Write-Host ""
     
-    $choice = Read-Host "Select extension (number), A for all, R for remove, or Q to quit"
+    # Show numbered menu
+    $num = 1
+    foreach ($item in $menuItems) {
+        if ($item -eq "---") {
+            Write-Host ("-" * 50)
+        }
+        else {
+            Write-Host "  [$num] $item"
+            $num++
+        }
+    }
+    Write-Host ("-" * 50)
+    Write-Host ""
     
-    switch ($choice.ToUpper()) {
-        "Q" {
-            Write-Info "Exiting..."
-            return
-        }
-        "A" {
-            Write-Info "Installing all extensions..."
-            Install-AllExtensions
-            return
-        }
-        "R" {
-            Write-Info "Remove Mode"
-            $removeChoice = Read-Host "Enter extension number to remove (or Q to cancel)"
-            if ($removeChoice -eq "Q") { return }
-            if ($removeChoice -match "^[0-9]+$") {
-                $extNum = [int]$removeChoice - 1
-                if ($extNum -ge 0 -and $extNum -lt $extensions.Count) {
-                    Remove-Extension $extensions[$extNum]
-                }
-            }
-            return
-        }
-        Default {
-            if ($choice -match "^[0-9]+$") {
-                $extNum = [int]$choice - 1
-                if ($extNum -ge 0 -and $extNum -lt $extensions.Count) {
-                    Install-Extension $extensions[$extNum]
-                }
-                else {
-                    Write-Error2 "Invalid selection"
-                }
-            }
-            else {
-                Write-Error2 "Invalid selection"
+    # Use keyboard navigation
+    $choice = Select-FromMenu -Items $menuItems -Prompt "Select an option"
+    
+    # Restore cursor
+    $host.UI.RawUI.CursorVisible = $true
+    Write-Host ""
+    
+    # Handle choice
+    if ($choice -eq -1) {
+        Write-Info "Cancelled"
+        return
+    }
+    elseif ($choice -eq -2) {
+        Write-Info "Exiting..."
+        return
+    }
+    elseif ($choice -eq 999) {
+        Write-Info "Installing all extensions..."
+        Install-AllExtensions
+        return
+    }
+    elseif ($choice -eq 998) {
+        Write-Info "Remove Mode"
+        $removeChoice = Read-Host "Enter extension number to remove (or Q to cancel)"
+        if ($removeChoice -eq "Q") { return }
+        if ($removeChoice -match "^[0-9]+$") {
+            $extNum = [int]$removeChoice - 1
+            if ($extNum -ge 0 -and $extNum -lt $extensions.Count) {
+                Remove-Extension $extensions[$extNum]
             }
         }
+        return
+    }
+    elseif ($choice -ge 0 -and $choice -lt $extensions.Count) {
+        # Install selected extension
+        Install-Extension $extensions[$choice]
+    }
+    else {
+        Write-Error2 "Invalid selection"
     }
 }
 
