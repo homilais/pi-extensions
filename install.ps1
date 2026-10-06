@@ -261,7 +261,8 @@ function Show-InteractiveMenu {
     Write-Info "`nAvailable Extensions:"
     Write-Host ("-" * 50)
     
-    # Build menu items with descriptions (extensions only)
+    # Build menu items: extensions + action items (all navigable)
+    $extCount = $extensions.Count
     $menuItems = @()
     foreach ($extName in $extensions) {
         $desc = Get-ExtensionDescription $extName
@@ -272,37 +273,54 @@ function Show-InteractiveMenu {
             $menuItems += $extName
         }
     }
+    # Add action items to the navigable menu
+    $menuItems += "[A] Install All"
+    $menuItems += "[R] Remove Mode"
+    $menuItems += "[Q] Quit"
     
-    Write-Host "  Use Up/Down arrows to navigate, Enter to install"
-    Write-Host "  Press A for Install All, R for Remove, Q to Quit"
+    Write-Host "  Use Up/Down arrows to navigate, Enter to select"
     Write-Host ""
     
     # Select-FromMenu handles display + keyboard navigation
-    $choice = Select-FromMenu -Items $menuItems -Prompt "Press Enter to install, or A/R/Q for other actions"
+    $choice = Select-FromMenu -Items $menuItems -Prompt "Press Enter to select, or A/R/Q as shortcut"
     
     Write-Host ("-" * 50)
     
-    # Handle choice
+    # Handle choice: index-based (from Enter) or special codes (from A/R/Q/Esc keys)
+    $installAllIdx = $extCount        # [A] Install All
+    $removeModeIdx = $extCount + 1    # [R] Remove Mode
+    $quitIdx = $extCount + 2          # [Q] Quit
+    
     if ($choice -eq -1) {
         Write-Info "Cancelled"
         return
     }
-    elseif ($choice -eq -2) {
+    elseif ($choice -eq -2 -or $choice -eq $quitIdx) {
         Write-Info "Exiting..."
         return
     }
-    elseif ($choice -eq 999) {
+    elseif ($choice -eq 999 -or $choice -eq $installAllIdx) {
         Write-Info "Installing all extensions..."
         Install-AllExtensions
         return
     }
-    elseif ($choice -eq 998) {
-        # Remove mode: reuse the same menu to select which extension to remove
+    elseif ($choice -eq 998 -or $choice -eq $removeModeIdx) {
+        # Remove mode: show extensions only for selection
+        $removeMenuItems = @()
+        foreach ($extName in $extensions) {
+            $desc = Get-ExtensionDescription $extName
+            if ($desc) {
+                $removeMenuItems += "$extName - $desc"
+            }
+            else {
+                $removeMenuItems += $extName
+            }
+        }
         Write-Info "Remove Mode - select extension to remove:"
         Write-Host ""
-        $removeChoice = Select-FromMenu -Items $menuItems -Prompt "Press Enter to remove, or Esc to cancel"
+        $removeChoice = Select-FromMenu -Items $removeMenuItems -Prompt "Press Enter to remove, or Esc to cancel"
         Write-Host ("-" * 50)
-        if ($removeChoice -ge 0 -and $removeChoice -lt $extensions.Count) {
+        if ($removeChoice -ge 0 -and $removeChoice -lt $extCount) {
             Remove-Extension $extensions[$removeChoice]
         }
         else {
@@ -310,7 +328,7 @@ function Show-InteractiveMenu {
         }
         return
     }
-    elseif ($choice -ge 0 -and $choice -lt $extensions.Count) {
+    elseif ($choice -ge 0 -and $choice -lt $extCount) {
         # Install selected extension
         Install-Extension $extensions[$choice]
     }
