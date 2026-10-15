@@ -41,7 +41,7 @@ install_extension() {
     local files=()
     while IFS= read -r -d '' file; do
         files+=("$file")
-    done < <(find "$ext_path" -name "*.ts" -o -name "*.js" -print0)
+    done < <(find "$ext_path" \( -name "*.ts" -o -name "*.js" \) -print0)
     
     if [ ${#files[@]} -eq 0 ]; then
         echo -e "${RED}Error: No extension files found in '$ext_name'${NC}"
@@ -151,9 +151,9 @@ remove_extension() {
         if [ -f "$PI_EXTENSIONS_DIR/$filename" ]; then
             rm "$PI_EXTENSIONS_DIR/$filename"
             echo -e "  ${YELLOW}✗${NC} Removed $filename"
-            ((removed++))
+            ((++removed))
         fi
-    done < <(find "$ext_path" -name "*.ts" -o -name "*.js" -print0)
+    done < <(find "$ext_path" \( -name "*.ts" -o -name "*.js" \) -print0)
     
     if [ $removed -eq 0 ]; then
         echo -e "${YELLOW}No installed files found for '$ext_name'${NC}"
@@ -238,9 +238,9 @@ main() {
         local failed=0
         for ext in "${to_install[@]}"; do
             if install_extension "$ext" "$force_mode"; then
-                ((success++))
+                ((++success))
             else
-                ((failed++))
+                ((++failed))
             fi
             echo ""
         done
@@ -265,9 +265,9 @@ main() {
         local failed=0
         for ext in "${extensions[@]}"; do
             if remove_extension "$ext"; then
-                ((success++))
+                ((++success))
             else
-                ((failed++))
+                ((++failed))
             fi
             echo ""
         done
