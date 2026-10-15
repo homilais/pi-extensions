@@ -4,7 +4,7 @@
  * Provides:
  * 1. `@skill:` inline autocomplete trigger in the TUI editor
  * 2. Input transformation to append filepath: @skill:name → @skill:name("filePath")
- * 3. Optional `discoverSkill` tool (disabled by default to reduce system prompt)
+ * 3. `discoverSkill` tool (enabled by default; set PI_SKILL_DISCOVER_TOOL=false to disable)
  * 
  * Design philosophy:
  * - @skill:name is a hint marker, not a command
@@ -14,8 +14,8 @@
  * - Path is wrapped in quotes for safe parsing with special characters
  * 
  * Configuration:
- * - Set environment variable PI_SKILL_DISCOVER_TOOL=true to enable the discoverSkill tool
- * - Default: tool is NOT registered (path injection provides filepath directly)
+ * - Set environment variable PI_SKILL_DISCOVER_TOOL=false to disable the discoverSkill tool
+ * - Default: tool is registered (enabled) — useful for finding skills hidden by disable-model-invocation
  *
  * Compatibility:
  * - Terminal (TUI): full support — autocomplete + path injection + tool
@@ -28,9 +28,11 @@ import type { AutocompleteProvider, AutocompleteItem, AutocompleteSuggestions } 
 import { Type } from "typebox";
 
 // --- Configuration ---
-// Set environment variable PI_SKILL_DISCOVER_TOOL=true to enable the discoverSkill tool.
-// Default: false (tool is not registered; path injection provides filepath directly)
-const ENABLE_DISCOVER_TOOL = process.env.PI_SKILL_DISCOVER_TOOL === "true";
+// Set environment variable PI_SKILL_DISCOVER_TOOL=false to disable the discoverSkill tool.
+// Default: true (tool is registered by default). Helps the LLM locate skills — especially
+// those hidden from the system prompt by disable-model-invocation: true — when a prompt
+// references them by name (@skillName, $skillName, or @skill:skillName).
+const ENABLE_DISCOVER_TOOL = process.env.PI_SKILL_DISCOVER_TOOL !== "false";
 
 // --- Skill cache (lazy-loaded on demand) ---
 // In terminal mode, session_start fires and loads skills eagerly.
@@ -170,16 +172,19 @@ function transformSkillReferences(text: string): string {
 // --- Main extension factory ---
 
 export default function (pi: ExtensionAPI): void {
-  // 1. Register the discoverSkill tool (optional, disabled by default)
+  // 1. Register the discoverSkill tool (enabled by default; disable via PI_SKILL_DISCOVER_TOOL=false)
   if (ENABLE_DISCOVER_TOOL) {
     pi.registerTool({
       name: "discoverSkill",
       label: "Discover Skill",
       description:
-        "Search loaded skills by name or description. Returns skill names, descriptions, and file paths. " +
-        "Use this to discover available skills. To load a skill, use the read tool to open the returned SKILL.md path.",
+        "Find installed skills by name or keyword; returns name, description, and SKILL.md path. " +
+        "Use when a prompt references a skill as @skillName, $skillName, or @skill:name — especially skills hidden from the system prompt by disable-model-invocation: true. " +
+        "To load a skill, read the returned SKILL.md path.",
+      promptSnippet:
+        "find installed skills by name/path — use when @skillName or $skillName appears, or to find skills hidden by disable-model-invocation",
       parameters: Type.Object({
-        query: Type.String({ description: "Search term to filter skill names. Empty string returns all skills." }),
+        query: Type.String({ description: "Skill name or keyword to search. Empty string returns all loaded skills." }),
       }),
       execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => {
         ensureSkills(pi.getCommands()); // ensure skills loaded before query
@@ -190,7 +195,7 @@ export default function (pi: ExtensionAPI): void {
             return `- ${s.name}${s.description ? ": " + s.description : ""}${path}`;
           });
           return {
-            content: [{ type: "text", text: `Available skills (${skills.length}):\n${items.join("\n")}\n\n提示: 使用 read 工具读取对应的 SKILL.md 文件来加载完整 skill 内容。` }],
+            content: [{ type: "text", text: `Available skills (${skills.length}):\n${items.join("\n")}` }],
           };
         }
         const matches = skills.filter(
@@ -204,7 +209,7 @@ export default function (pi: ExtensionAPI): void {
           return `- ${s.name}${s.description ? ": " + s.description : ""}${path}`;
         });
         return {
-          content: [{ type: "text", text: `Found ${matches.length} skill(s):\n${items.join("\n")}\n\n提示: 使用 read 工具读取对应的 SKILL.md 文件来加载完整 skill 内容。` }],
+          content: [{ type: "text", text: `Found ${matches.length} skill(s):\n${items.join("\n")}` }],
         };
       },
     });

@@ -12,7 +12,7 @@ Pi 扩展，用于 skill 发现和 `@skill:` 内联自动补全。
 
 3. **自动路径注入** — 输入时 `@skill:name` 会被转换为 `@skill:name("filePath")`，直接提供文件路径给模型。
 
-4. **可选 `discoverSkill` 工具** — 按需启用（默认禁用以减少 system prompt）。
+4. **`discoverSkill` 工具** — 默认启用。帮助 LLM 快速查找已安装 skill 的名称和路径，特别是被 `disable-model-invocation: true` 隐藏在 system prompt 之外的 skill。
 
 ## 使用方法
 
@@ -41,32 +41,33 @@ Pi 扩展，用于 skill 发现和 `@skill:` 内联自动补全。
 
 ## 配置
 
-### 启用 discoverSkill 工具（可选）
+### 禁用 discoverSkill 工具（可选）
 
-`discoverSkill` 工具**默认禁用**，因为 `@skill:` 语法已自动注入文件路径。
+`discoverSkill` 工具**默认启用**。当提示词中通过名称引用 skill（`@skillName`、`$skillName` 或 `@skill:skillName`）时，帮助 LLM 定位该 skill —— 特别是标记了 `disable-model-invocation: true` 的 skill，它们在 system prompt 中不可见，只能通过此工具按名称查找。
 
-如需启用该工具（例如不使用 `@skill:` 引用时发现 skills）：
+如需禁用该工具（例如你只使用 `@skill:` 语法，希望减少 system prompt）：
 
 ```bash
 # Windows PowerShell
-$env:PI_SKILL_DISCOVER_TOOL = "true"
+$env:PI_SKILL_DISCOVER_TOOL = "false"
 pi
 
 # Linux/Mac
-export PI_SKILL_DISCOVER_TOOL=true
+export PI_SKILL_DISCOVER_TOOL=false
 pi
 ```
 
-启用后，LLM 可以调用 `discoverSkill` 来：
-- 列出所有可用 skills
+保持启用时，LLM 可以调用 `discoverSkill` 来：
+- 列出所有已加载 skills（名称、描述、文件路径）
 - 按名称或关键词搜索 skills
+- 查找被 `disable-model-invocation: true` 隐藏的 skills
 
-### 何时启用工具
+### 何时保持工具启用
 
-在以下场景建议启用：
-- 希望 LLM 在不使用 `@skill:` 引用的情况下发现 skills
-- 询问"有哪些可用 skills？"并获取列表
-- 按关键词搜索 skills
+建议保持启用（默认）如果：
+- 希望提示词中出现 `@skillName` 或 `$skillName` 时 LLM 能找到该 skill
+- 希望查找被 `disable-model-invocation` 隐藏的 skills
+- 询问"有哪些可用 skills？"并获取带路径的列表
 
 ## 安装
 
@@ -91,4 +92,4 @@ cp extensions/skill-discover/skill-discover.ts ~/.pi/agent/extensions/
 - Skills 在会话开始时缓存。添加新 skills 后请运行 `/reload`。
 - `@skill:` 自动补全不受 `enableSkillCommands` 设置影响。
 - 模型完全自主决定是否加载引用的 skill。
-- 默认模式（工具禁用）适用于大多数场景，因为文件路径已自动注入。
+- `discoverSkill` 工具默认启用，使 LLM 能按名称定位 skill，包括被 `disable-model-invocation` 隐藏的 skill。

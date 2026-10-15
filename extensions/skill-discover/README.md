@@ -12,7 +12,7 @@ A Pi extension for skill discovery and `@skill:` inline autocomplete.
 
 3. **Auto filepath injection** — On input, `@skill:name` is transformed to `@skill:name("filePath")`, giving the model the path directly.
 
-4. **Optional `discoverSkill` tool** — Available on request (disabled by default to reduce system prompt).
+4. **`discoverSkill` tool** — Enabled by default. Helps the LLM quickly look up installed skills by name/path, especially skills hidden from the system prompt by `disable-model-invocation: true`.
 
 ## Usage
 
@@ -41,32 +41,33 @@ The editor shows matching skill names. Press Tab or Enter to select.
 
 ## Configuration
 
-### Enable discoverSkill tool (optional)
+### Disable discoverSkill tool (optional)
 
-The `discoverSkill` tool is **disabled by default** since filepath is auto-injected via `@skill:` syntax.
+The `discoverSkill` tool is **enabled by default**. It helps the LLM locate skills when a prompt references them by name (`@skillName`, `$skillName`, or `@skill:skillName`) — especially skills marked `disable-model-invocation: true`, which are hidden from the system prompt and can only be found via this tool.
 
-To enable the tool (e.g., for discovering skills without `@skill:` references):
+To disable the tool (e.g., you only ever use `@skill:` syntax and want a smaller system prompt):
 
 ```bash
 # Windows PowerShell
-$env:PI_SKILL_DISCOVER_TOOL = "true"
+$env:PI_SKILL_DISCOVER_TOOL = "false"
 pi
 
 # Linux/Mac
-export PI_SKILL_DISCOVER_TOOL=true
+export PI_SKILL_DISCOVER_TOOL=false
 pi
 ```
 
-When enabled, the LLM can call `discoverSkill` to:
-- List all available skills
-- Search skills by name or query
+When kept enabled, the LLM can call `discoverSkill` to:
+- List all loaded skills (name, description, file path)
+- Search skills by name or keyword
+- Find skills hidden by `disable-model-invocation: true`
 
-### When to enable the tool
+### When to keep the tool enabled
 
-Enable the tool if you want:
-- LLM to discover skills without explicit `@skill:` references
-- To ask "What skills are available?" and get a list
-- To search for skills by keyword
+Keep it enabled (the default) if you want:
+- The LLM to find skills when `@skillName` or `$skillName` appears in a prompt without a path
+- The LLM to locate skills hidden from the system prompt by `disable-model-invocation`
+- To ask "What skills are available?" and get a list with paths
 
 ## Installation
 
@@ -91,4 +92,4 @@ cp extensions/skill-discover/skill-discover.ts ~/.pi/agent/extensions/
 - Skills are cached at session start. Run `/reload` after adding new skills.
 - `@skill:` autocomplete works regardless of `enableSkillCommands` setting.
 - The model has full autonomy to decide whether to load a referenced skill.
-- Default mode (tool disabled) is optimal for most use cases since filepath is auto-injected.
+- The `discoverSkill` tool is enabled by default so the LLM can locate skills by name, including those hidden by `disable-model-invocation`.
