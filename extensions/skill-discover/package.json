@@ -1,5 +1,5 @@
 {
-  "name": "pi-skill-discover",
+  "name": "@homilais/pi-skill-discover",
   "version": "1.0.0",
   "description": "Pi extension for skill discovery with @skill: inline autocomplete and auto filepath injection",
   "type": "module",
